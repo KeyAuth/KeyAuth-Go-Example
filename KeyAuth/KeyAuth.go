@@ -1,24 +1,24 @@
 package keyauth
 
 import (
+	"bytes"
 	"fmt"
-    "bytes"
+	"io"
 	"os"
 	"runtime"
-    "io"
 	"strings"
 	"time"
 
-    "crypto/hmac"
+	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha256"
-    "net/http"
+	"encoding/hex"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os/exec"
-    "encoding/hex"
-	"encoding/json"
 	"path/filepath"
-	"crypto/md5"
-	"io/ioutil"
 
 	"github.com/google/uuid"
 )
@@ -811,14 +811,17 @@ func GetHWID() string {
         return hwid
 
     case "windows":
-        const xx = "cmd.exe"
+		const xx = "cmd.exe"
 
-        var stdout bytes.Buffer
-        cmd := exec.Command(xx, "/c", "wmic csproduct get uuid")
-        cmd.Stdout = &stdout
-        cmd.Run()
-        
-        return strings.TrimSpace(strings.TrimPrefix(stdout.String(), "UUID"))
+		var stdout bytes.Buffer
+		cmd := exec.Command(xx, "/c", "wmic useraccount where name='%username%' get sid")
+		cmd.Stdout = &stdout
+		err := cmd.Run()
+		if err != nil {
+			return ""
+		}
+	
+		return strings.TrimSpace(strings.TrimPrefix(stdout.String(), "SID"))
 
     case "darwin":
         out, err := exec.Command("ioreg", "-l", "|", "grep", "IOPlatformSerialNumber").Output()
