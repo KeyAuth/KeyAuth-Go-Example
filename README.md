@@ -69,7 +69,6 @@ fmt.Println("\nApp Data:")
 fmt.Println("Number of users: ", KeyAuthApp.NumUsers)
 fmt.Println("Number of online users: ", KeyAuthApp.NumOnlineUsers)
 fmt.Println("Number of keys: ", KeyAuthApp.NumKeys)
-fmt.Println("Number of keys: ", KeyAuthApp.NumKeys)
 fmt.Println("Application Version: ", KeyAuthApp.Version)
 fmt.Println("Customer panel link: ", KeyAuthApp.CustomerPanelURL)
 ```
