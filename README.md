@@ -1,5 +1,5 @@
 # KeyAuth-Go-Example : Please star 🌟
-KeyAuth Python example for the https://keyauth.cc authentication system.
+KeyAuth Go example for the https://keyauth.cc authentication system.
 
 ## **Bugs**
 
@@ -85,7 +85,7 @@ fmt.Println("Current Session Validation Status: ", KeyAuthApp.Check())
 
 Check if HWID or IP Address is blacklisted. You can add this if you want, just to make sure nobody can open your program for less than a second if they're blacklisted. Though, if you don't mind a blacklisted user having the program for a few seconds until they try to login and register, and you care about having the quickest program for your users, you shouldn't use this function then. If a blacklisted user tries to login/register, the KeyAuth server will check if they're blacklisted and deny entry if so. So the check blacklist function is just auxiliary function that's optional.
 
-```py
+```go
 if KeyAuthApp.CheckBlack() {
     fmt.Println("You've been blacklisted from this application.")
     os.Exit(1)
@@ -250,7 +250,7 @@ KeyAuthApp.Ban()
 Logout the users session and close the application. 
 
 This only works if the user is authenticated (logged in)
-```py
+```go
 KeyAuthApp.Logout()
 ```
 
