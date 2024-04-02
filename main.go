@@ -19,7 +19,7 @@ func main() {
     KeyAuthApp.Api(
         "", // -- Application Name
         "", // -- Owner ID
-        "", // -- Applicaiton Secret
+        "", // -- Application Secret
         "", // -- Application Version
         "", // -- Token Path (PUT NULL OR LEAVE BLANK IF YOU DON'T WANT TO USE TOKEN SYSTEM)
     )
