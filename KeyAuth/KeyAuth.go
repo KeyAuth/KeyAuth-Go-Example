@@ -789,7 +789,10 @@ func doRequest(postData map[string]string) string {
     if len(string(responseBody)) <= 200 {
         tampered := clientComputedStr != signature
         executionTime := time.Now().Format("03:04:05 PM | 01/02/2006")
-        debugLog := fmt.Sprintf("\n%s | %s \nResponse: %s\nWas response tampered with? %v\n", executionTime, postData["type"], string(responseBody), tampered)
+        
+        redactedResponse := redactFields(responseBody)
+        
+        debugLog := fmt.Sprintf("\n%s | %s \nResponse: %s\nWas response tampered with? %v\n", executionTime, postData["type"], redactedResponse, tampered)
         
         if err := writeDebugLogToFile(filepath.Join(debugPath, "log.txt"), debugLog); err != nil {
             fmt.Println("Error writing debug log to file:", err)
@@ -943,4 +946,28 @@ func tokenHash(tokenPath string) string {
 
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func redactFields(responseBody []byte) string {
+    var responseMap map[string]interface{}
+    if err := json.Unmarshal(responseBody, &responseMap); err != nil {
+        fmt.Println("Error unmarshalling response:", err)
+        return string(responseBody)
+    }
+
+    sensitiveFields := []string{"sessionid", "ownerid", "app", "secret", "version", "fileid", "webhooks"}
+
+    for _, field := range sensitiveFields {
+        if _, exists := responseMap[field]; exists {
+            responseMap[field] = "REDACTED"
+        }
+    }
+
+    redactedResponse, err := json.Marshal(responseMap)
+    if err != nil {
+        fmt.Println("Error marshalling redacted response:", err)
+        return string(responseBody)
+    }
+
+    return string(redactedResponse)
 }
