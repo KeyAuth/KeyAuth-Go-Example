@@ -41,7 +41,7 @@ For API, `keyauth.cc` will not work because I purposefully blocked it on there s
 
 ## **`KeyAuthApp` instance definition**
 
-Visit https://keyauth.cc/app/ and select your application, then click on the **Python** tab
+Visit https://keyauth.cc/app/ and select your application, then click on the **Go** tab
 
 It'll provide you with the code which you should replace with in the `main.go` file.
 
