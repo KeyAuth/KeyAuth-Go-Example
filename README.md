@@ -271,7 +271,7 @@ Send HTTP requests to URLs securely without leaking the URL in your application.
 
 ```go
 * example to send normal request with no POST data
-data := KeyAuthApp.Webhook("7kR0UedlVI", "&ip=1.1.1.1&hwid=abc")
+data := KeyAuthApp.Webhook("7kR0UedlVI", "?ip=1.1.1.1&hwid=abc")
 
 * example to send form data
 data := KeyAuthApp.Webhook("7kR0UedlVI", "", "type=init&name=test&ownerid=j9Gj0FTemM", "application/x-www-form-urlencoded")
