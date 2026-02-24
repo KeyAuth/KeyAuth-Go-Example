@@ -4,6 +4,7 @@ import (
 	KeyAuthApp "KeyAuth/KeyAuth"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -15,11 +16,20 @@ func Input(message string) string {
 	return input
 }
 
+func UnixToReadable(unixTimestamp string) string {
+	timestamp, err := strconv.ParseInt(unixTimestamp, 10, 64)
+	if err != nil {
+		return unixTimestamp // Return original if parsing fails
+	}
+	t := time.Unix(timestamp, 0).UTC()
+	return t.Format("2006-01-02 15:04:05")
+}
+
 func main() {
 	KeyAuthApp.Api(
-		"KeyAuth",    // -- Application Name
-		"mpgOizljNW", // -- Owner ID
-		"1.1",        // -- Application Version
+		"",    // -- Application Name
+		"", // -- Owner ID
+		"1.0",        // -- Application Version
 		"",           // -- Token Path (PUT NULL OR LEAVE BLANK IF YOU DON'T WANT TO USE TOKEN SYSTEM)
 	)
 
@@ -60,8 +70,9 @@ func main() {
 	fmt.Println("   Username: ", KeyAuthApp.Username)
 	fmt.Println("   IP Address: ", KeyAuthApp.IP)
 	fmt.Println("   HWID: ", KeyAuthApp.HWID)
-	fmt.Println("   Created At: ", KeyAuthApp.CreatedDate)
-	fmt.Println("   Last Login At: ", KeyAuthApp.LastLogin)
+	fmt.Println("   Created At: ", UnixToReadable(KeyAuthApp.CreatedDate))
+	fmt.Println("   Last Login At: ", UnixToReadable(KeyAuthApp.LastLogin))
+	fmt.Println("   Subscription Expiry: ", UnixToReadable(KeyAuthApp.Expires))
 	fmt.Println("   Subscription: ", KeyAuthApp.Subscription)
 
 	fmt.Println("\nExiting application in 10 seconds...")

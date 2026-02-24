@@ -895,10 +895,19 @@ func LoadAppData(data interface{}) string {
 	if !ok {
 		return "Error: AppInfo data is not in expected format"
 	}
-	NumUsers = appInfo["numUsers"].(string)
-	NumKeys = appInfo["numKeys"].(string)
-	CustomerPanelURL = appInfo["customerPanelLink"].(string)
-	NumOnlineUsers = appInfo["numOnlineUsers"].(string)
+	
+	if val, ok := appInfo["numUsers"].(string); ok {
+		NumUsers = val
+	}
+	if val, ok := appInfo["numKeys"].(string); ok {
+		NumKeys = val
+	}
+	if val, ok := appInfo["customerPanelLink"].(string); ok {
+		CustomerPanelURL = val
+	}
+	if val, ok := appInfo["numOnlineUsers"].(string); ok {
+		NumOnlineUsers = val
+	}
 
 	return ""
 }
@@ -909,29 +918,50 @@ func LoadUserData(data interface{}) string {
 		return "Error: UserInfo data is not in expected format"
 	}
 
-	Username = userInfo["username"].(string)
-	IP = userInfo["ip"].(string)
+	// Safely extract username
+	if val, ok := userInfo["username"].(string); ok {
+		Username = val
+	}
 
+	// Safely extract IP
+	if val, ok := userInfo["ip"].(string); ok {
+		IP = val
+	}
+
+	// Safely extract HWID
 	if hwidFloat, ok := userInfo["hwid"].(float64); ok {
 		HWID = fmt.Sprintf("%f", hwidFloat)
-	} else {
-		HWID = userInfo["hwid"].(string)
+	} else if hwidStr, ok := userInfo["hwid"].(string); ok {
+		HWID = hwidStr
 	}
 	if HWID == "" {
 		HWID = "N/A"
 	}
 
+	// Safely extract subscriptions
 	subscriptions, ok := userInfo["subscriptions"].([]interface{})
 	if ok && len(subscriptions) > 0 {
 		subscriptionData, ok := subscriptions[0].(map[string]interface{})
 		if ok {
-			Expires = subscriptionData["expiry"].(string)
-			Subscription = subscriptionData["subscription"].(string)
+			if val, ok := subscriptionData["expiry"].(string); ok {
+				Expires = val
+			}
+			if val, ok := subscriptionData["subscription"].(string); ok {
+				Subscription = val
+			}
 		}
 	}
 
-	CreatedDate = userInfo["createdate"].(string)
-	LastLogin = userInfo["lastlogin"].(string)
+	// Safely extract createdate
+	if val, ok := userInfo["createdate"].(string); ok {
+		CreatedDate = val
+	}
+
+	// Safely extract lastlogin
+	if val, ok := userInfo["lastlogin"].(string); ok {
+		LastLogin = val
+	}
+
 	subscriptionsJSON, err := json.Marshal(subscriptions)
 	if err != nil {
 		return "Error converting subscriptions to JSON: " + err.Error()
