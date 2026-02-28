@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -30,6 +29,8 @@ var (
 	CustomerPanelURL string
 	SessionID        string = "lol"
 )
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 var (
 	Name          string
@@ -83,7 +84,7 @@ func Init() {
 	}
 
 	if TokenPath != "" {
-		token, err := ioutil.ReadFile(TokenPath)
+		token, err := os.ReadFile(TokenPath)
 		if err != nil {
 			fmt.Println("Error reading token file: " + err.Error())
 		}
@@ -741,8 +742,7 @@ func doRequest(postData map[string]string) string {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := http.Client{Timeout: 10 * time.Second}
-	response, err := client.Do(req)
+	response, err := httpClient.Do(req)
 	if err != nil {
 		fmt.Println("Error sending request:", err)
 		return ""
@@ -784,7 +784,7 @@ func doRequest(postData map[string]string) string {
 	}
 
 	exeName := filepath.Base(os.Args[0])
-	debugPath := filepath.Join("C:\\ProgramData\\KeyAuth\\Debug", exeName)
+	debugPath := debugDir(exeName)
 
 	if _, err := os.Stat(debugPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(debugPath, 0755); err != nil {
@@ -792,7 +792,8 @@ func doRequest(postData map[string]string) string {
 		}
 	}
 
-	if len(string(responseBody)) <= 200 {
+	responseText := string(responseBody)
+	if len(responseText) <= 200 {
 		tampered := false
 		executionTime := time.Now().Format("03:04:05 PM | 01/02/2006")
 
@@ -805,7 +806,7 @@ func doRequest(postData map[string]string) string {
 		}
 	}
 
-	return string(responseBody)
+	return responseText
 }
 
 func verifySignature(responseBody []byte, signature, timestamp, publicKey string) bool {
@@ -859,13 +860,17 @@ func GetHWID() string {
 		return strings.TrimSpace(strings.TrimPrefix(stdout.String(), "SID"))
 
 	case "darwin":
-		out, err := exec.Command("ioreg", "-l", "|", "grep", "IOPlatformSerialNumber").Output()
+		out, err := exec.Command("/bin/sh", "-c", "ioreg -l | grep IOPlatformSerialNumber").Output()
 		if err != nil {
 			fmt.Println("Error reading IOPlatformSerialNumber: " + err.Error())
 			return ""
 		}
-		serial := strings.Split(string(out), "=")[1]
-		hwid := strings.TrimSpace(strings.ReplaceAll(serial, " ", ""))
+		parts := strings.SplitN(string(out), "=", 2)
+		if len(parts) != 2 {
+			return ""
+		}
+		serial := strings.TrimSpace(parts[1])
+		hwid := strings.Trim(serial, "\"")
 		return hwid
 
 	default:
@@ -988,7 +993,7 @@ func openUrl(url string) error {
 }
 
 func writeDebugLogToFile(filePath, debugLog string) error {
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1008,7 @@ func writeDebugLogToFile(filePath, debugLog string) error {
 }
 
 func tokenHash(tokenPath string) string {
-	data, err := ioutil.ReadFile(tokenPath)
+	data, err := os.ReadFile(tokenPath)
 	if err != nil {
 		panic(err)
 	}
@@ -1034,4 +1039,16 @@ func redactFields(responseBody []byte) string {
 	}
 
 	return string(redactedResponse)
+}
+
+func debugDir(exeName string) string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join("C:\\ProgramData\\KeyAuth\\Debug", exeName)
+	default:
+		if dir, err := os.UserCacheDir(); err == nil && dir != "" {
+			return filepath.Join(dir, "keyauth", "debug", exeName)
+		}
+		return filepath.Join(os.TempDir(), "keyauth", "debug", exeName)
+	}
 }

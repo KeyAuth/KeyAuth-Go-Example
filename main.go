@@ -25,47 +25,7 @@ func UnixToReadable(unixTimestamp string) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func main() {
-	KeyAuthApp.Api(
-		"",    // -- Application Name
-		"", // -- Owner ID
-		"1.0",        // -- Application Version
-		"",           // -- Token Path (PUT NULL OR LEAVE BLANK IF YOU DON'T WANT TO USE TOKEN SYSTEM)
-	)
-
-	fmt.Println("[1] Login")
-	fmt.Println("[2] Register")
-	fmt.Println("[3] Upgrade")
-	fmt.Println("[4] License Only Login")
-
-	ans := Input("\nChoose your option: ")
-
-	if ans == "1" {
-		username := Input("Input username: ")
-		password := Input("Input password: ")
-
-		KeyAuthApp.Login(username, password)
-	} else if ans == "2" {
-		username := Input("Input username: ")
-		password := Input("Input password: ")
-		license := Input("Input license: ")
-
-		KeyAuthApp.Register(username, password, license)
-	} else if ans == "3" {
-		username := Input("Input username: ")
-		license := Input("Input license: ")
-
-		KeyAuthApp.Upgrade(username, license)
-	} else if ans == "4" {
-		license := Input("Input license: ")
-
-		KeyAuthApp.License(license)
-	} else {
-		fmt.Println("Invalid option")
-		time.Sleep(2 * time.Second)
-		main()
-	}
-
+func printUserData() {
 	fmt.Println("\nUser Data:")
 	fmt.Println("   Username: ", KeyAuthApp.Username)
 	fmt.Println("   IP Address: ", KeyAuthApp.IP)
@@ -74,6 +34,58 @@ func main() {
 	fmt.Println("   Last Login At: ", UnixToReadable(KeyAuthApp.LastLogin))
 	fmt.Println("   Subscription Expiry: ", UnixToReadable(KeyAuthApp.Expires))
 	fmt.Println("   Subscription: ", KeyAuthApp.Subscription)
+}
+
+func showMenu() {
+	fmt.Println("[1] Login")
+	fmt.Println("[2] Register")
+	fmt.Println("[3] Upgrade")
+	fmt.Println("[4] License Only Login")
+}
+
+func main() {
+	KeyAuthApp.Api(
+		"",    // -- Application Name
+		"", // -- Owner ID
+		"1.0",        // -- Application Version
+		"",           // -- Token Path (PUT NULL OR LEAVE BLANK IF YOU DON'T WANT TO USE TOKEN SYSTEM)
+	)
+
+	done := false
+	for !done {
+		showMenu()
+		ans := Input("\nChoose your option: ")
+
+		switch ans {
+		case "1":
+			username := Input("Input username: ")
+			password := Input("Input password: ")
+			KeyAuthApp.Login(username, password)
+			printUserData()
+			done = true
+		case "2":
+			username := Input("Input username: ")
+			password := Input("Input password: ")
+			license := Input("Input license: ")
+			KeyAuthApp.Register(username, password, license)
+			printUserData()
+			done = true
+		case "3":
+			username := Input("Input username: ")
+			license := Input("Input license: ")
+			KeyAuthApp.Upgrade(username, license)
+			printUserData()
+			done = true
+		case "4":
+			license := Input("Input license: ")
+			KeyAuthApp.License(license)
+			printUserData()
+			done = true
+		default:
+			fmt.Println("Invalid option")
+			time.Sleep(2 * time.Second)
+		}
+	}
 
 	fmt.Println("\nExiting application in 10 seconds...")
 	time.Sleep(10 * time.Second)
