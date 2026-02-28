@@ -48,6 +48,8 @@ var (
 	Subscriptions string
 	Initialized   bool
 	PublicKey     string = "5586b4bc69c7a4b487e4563a4cd96afd39140f919bd31cea7d1c6a1e8439422b"
+	serverTime    int64
+	serverTimeAt  time.Time
 )
 
 func Api(name, ownerid, version, path string) {
@@ -163,6 +165,7 @@ func Register(user, password, license string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -197,6 +200,7 @@ func Login(user, password string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -228,6 +232,7 @@ func Forgot(user, email string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -293,6 +298,7 @@ func License(key string) {
 
 	if jsonResponse["success"].(bool) {
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 		fmt.Println(jsonResponse["message"].(string))
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
@@ -769,6 +775,7 @@ func doRequest(postData map[string]string) string {
 		time.Sleep(5 * time.Second)
 		os.Exit(1)
 	}
+	setServerTime(serverTime)
 	currentTime := time.Now().Unix()
 	bufferSeconds := int64(5)
 	if abs(currentTime-serverTime) > bufferSeconds+20 {
@@ -833,6 +840,41 @@ func abs(x int64) int64 {
 		return -x
 	}
 	return x
+}
+
+func setServerTime(ts int64) {
+	serverTime = ts
+	serverTimeAt = time.Now()
+}
+
+func serverUnix() (int64, bool) {
+	if serverTime == 0 || serverTimeAt.IsZero() {
+		return 0, false
+	}
+	elapsed := time.Since(serverTimeAt)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	return serverTime + int64(elapsed.Seconds()), true
+}
+
+func EnforceNotExpired() {
+	if Expires == "" {
+		return
+	}
+	expiry, err := strconv.ParseInt(Expires, 10, 64)
+	if err != nil || expiry == 0 {
+		return
+	}
+	now, ok := serverUnix()
+	if !ok {
+		return
+	}
+	if now >= expiry {
+		fmt.Println("Subscription expired.")
+		time.Sleep(3 * time.Second)
+		os.Exit(1)
+	}
 }
 
 func GetHWID() string {
