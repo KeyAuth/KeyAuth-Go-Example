@@ -53,6 +53,12 @@ func main() {
 
 	done := false
 	for !done {
+		if KeyAuthApp.LockoutActive() {
+			fmt.Printf("Locked out. Try again in %d ms\n", KeyAuthApp.LockoutRemainingMs())
+			KeyAuthApp.CloseDelay()
+			os.Exit(1)
+		}
+
 		showMenu()
 		ans := Input("\nChoose your option: ")
 
@@ -62,6 +68,7 @@ func main() {
 			password := Input("Input password: ")
 			KeyAuthApp.Login(username, password)
 			printUserData()
+			KeyAuthApp.ResetLockout()
 			done = true
 		case "2":
 			username := Input("Input username: ")
@@ -69,21 +76,24 @@ func main() {
 			license := Input("Input license: ")
 			KeyAuthApp.Register(username, password, license)
 			printUserData()
+			KeyAuthApp.ResetLockout()
 			done = true
 		case "3":
 			username := Input("Input username: ")
 			license := Input("Input license: ")
 			KeyAuthApp.Upgrade(username, license)
 			printUserData()
+			KeyAuthApp.ResetLockout()
 			done = true
 		case "4":
 			license := Input("Input license: ")
 			KeyAuthApp.License(license)
 			printUserData()
+			KeyAuthApp.ResetLockout()
 			done = true
 		default:
 			fmt.Println("Invalid option")
-			time.Sleep(2 * time.Second)
+			KeyAuthApp.BadInputDelay()
 		}
 	}
 
