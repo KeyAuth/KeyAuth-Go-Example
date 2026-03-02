@@ -9,13 +9,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -30,6 +30,8 @@ var (
 	CustomerPanelURL string
 	SessionID        string = "lol"
 )
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 var (
 	Name          string
@@ -47,6 +49,36 @@ var (
 	Subscriptions string
 	Initialized   bool
 	PublicKey     string = "5586b4bc69c7a4b487e4563a4cd96afd39140f919bd31cea7d1c6a1e8439422b"
+	serverTime    int64
+	serverTimeAt  time.Time
+)
+
+type LockoutState struct {
+	FailCount    int
+	FirstFailAt  time.Time
+	LockedUntil  time.Time
+	LastFailAt   time.Time
+}
+
+type LockoutConfig struct {
+	MaxAttempts int
+	Window      time.Duration
+	Lockout     time.Duration
+}
+
+var lockoutMu sync.Mutex
+var lockoutState LockoutState
+
+var LockoutSettings = LockoutConfig{
+	MaxAttempts: 5,
+	Window:      2 * time.Minute,
+	Lockout:     5 * time.Minute,
+}
+
+const (
+	initFailDelayMs  = 1500
+	badInputDelayMs  = 3000
+	closeDelayMs     = 5000
 )
 
 func Api(name, ownerid, version, path string) {
@@ -83,7 +115,7 @@ func Init() {
 	}
 
 	if TokenPath != "" {
-		token, err := ioutil.ReadFile(TokenPath)
+		token, err := os.ReadFile(TokenPath)
 		if err != nil {
 			fmt.Println("Error reading token file: " + err.Error())
 		}
@@ -162,6 +194,7 @@ func Register(user, password, license string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -196,6 +229,7 @@ func Login(user, password string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -227,6 +261,7 @@ func Forgot(user, email string) {
 	if jsonResponse["success"].(bool) {
 		fmt.Println(jsonResponse["message"].(string))
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
 		time.Sleep(3 * time.Second)
@@ -292,6 +327,7 @@ func License(key string) {
 
 	if jsonResponse["success"].(bool) {
 		LoadUserData(jsonResponse["info"])
+		EnforceNotExpired()
 		fmt.Println(jsonResponse["message"].(string))
 	} else {
 		fmt.Println(jsonResponse["message"].(string))
@@ -741,8 +777,7 @@ func doRequest(postData map[string]string) string {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := http.Client{Timeout: 10 * time.Second}
-	response, err := client.Do(req)
+	response, err := httpClient.Do(req)
 	if err != nil {
 		fmt.Println("Error sending request:", err)
 		return ""
@@ -769,6 +804,7 @@ func doRequest(postData map[string]string) string {
 		time.Sleep(5 * time.Second)
 		os.Exit(1)
 	}
+	setServerTime(serverTime)
 	currentTime := time.Now().Unix()
 	bufferSeconds := int64(5)
 	if abs(currentTime-serverTime) > bufferSeconds+20 {
@@ -784,7 +820,7 @@ func doRequest(postData map[string]string) string {
 	}
 
 	exeName := filepath.Base(os.Args[0])
-	debugPath := filepath.Join("C:\\ProgramData\\KeyAuth\\Debug", exeName)
+	debugPath := debugDir(exeName)
 
 	if _, err := os.Stat(debugPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(debugPath, 0755); err != nil {
@@ -792,7 +828,8 @@ func doRequest(postData map[string]string) string {
 		}
 	}
 
-	if len(string(responseBody)) <= 200 {
+	responseText := string(responseBody)
+	if len(responseText) <= 200 {
 		tampered := false
 		executionTime := time.Now().Format("03:04:05 PM | 01/02/2006")
 
@@ -805,7 +842,7 @@ func doRequest(postData map[string]string) string {
 		}
 	}
 
-	return string(responseBody)
+	return responseText
 }
 
 func verifySignature(responseBody []byte, signature, timestamp, publicKey string) bool {
@@ -834,6 +871,106 @@ func abs(x int64) int64 {
 	return x
 }
 
+func setServerTime(ts int64) {
+	serverTime = ts
+	serverTimeAt = time.Now()
+}
+
+func serverUnix() (int64, bool) {
+	if serverTime == 0 || serverTimeAt.IsZero() {
+		return 0, false
+	}
+	elapsed := time.Since(serverTimeAt)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	return serverTime + int64(elapsed.Seconds()), true
+}
+
+func EnforceNotExpired() {
+	if Expires == "" {
+		return
+	}
+	expiry, err := strconv.ParseInt(Expires, 10, 64)
+	if err != nil || expiry == 0 {
+		return
+	}
+	now, ok := serverUnix()
+	if !ok {
+		return
+	}
+	if now >= expiry {
+		fmt.Println("Subscription expired.")
+		time.Sleep(3 * time.Second)
+		os.Exit(1)
+	}
+}
+
+func InitFailDelay() {
+	time.Sleep(initFailDelayMs * time.Millisecond)
+}
+
+func BadInputDelay() {
+	time.Sleep(badInputDelayMs * time.Millisecond)
+}
+
+func CloseDelay() {
+	time.Sleep(closeDelayMs * time.Millisecond)
+}
+
+func LockoutStateSnapshot() LockoutState {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	return lockoutState
+}
+
+func LockoutActive() bool {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	if lockoutState.LockedUntil.IsZero() {
+		return false
+	}
+	return time.Now().Before(lockoutState.LockedUntil)
+}
+
+func LockoutRemainingMs() int64 {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	if lockoutState.LockedUntil.IsZero() {
+		return 0
+	}
+	remaining := time.Until(lockoutState.LockedUntil)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining.Milliseconds()
+}
+
+func RecordLoginFail() {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+
+	now := time.Now()
+	lockoutState.LastFailAt = now
+
+	if lockoutState.FirstFailAt.IsZero() || now.Sub(lockoutState.FirstFailAt) > LockoutSettings.Window {
+		lockoutState.FirstFailAt = now
+		lockoutState.FailCount = 1
+		return
+	}
+
+	lockoutState.FailCount++
+	if lockoutState.FailCount >= LockoutSettings.MaxAttempts {
+		lockoutState.LockedUntil = now.Add(LockoutSettings.Lockout)
+	}
+}
+
+func ResetLockout() {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	lockoutState = LockoutState{}
+}
+
 func GetHWID() string {
 	switch runtime.GOOS {
 	case "linux":
@@ -859,13 +996,17 @@ func GetHWID() string {
 		return strings.TrimSpace(strings.TrimPrefix(stdout.String(), "SID"))
 
 	case "darwin":
-		out, err := exec.Command("ioreg", "-l", "|", "grep", "IOPlatformSerialNumber").Output()
+		out, err := exec.Command("/bin/sh", "-c", "ioreg -l | grep IOPlatformSerialNumber").Output()
 		if err != nil {
 			fmt.Println("Error reading IOPlatformSerialNumber: " + err.Error())
 			return ""
 		}
-		serial := strings.Split(string(out), "=")[1]
-		hwid := strings.TrimSpace(strings.ReplaceAll(serial, " ", ""))
+		parts := strings.SplitN(string(out), "=", 2)
+		if len(parts) != 2 {
+			return ""
+		}
+		serial := strings.TrimSpace(parts[1])
+		hwid := strings.Trim(serial, "\"")
 		return hwid
 
 	default:
@@ -988,7 +1129,7 @@ func openUrl(url string) error {
 }
 
 func writeDebugLogToFile(filePath, debugLog string) error {
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1144,7 @@ func writeDebugLogToFile(filePath, debugLog string) error {
 }
 
 func tokenHash(tokenPath string) string {
-	data, err := ioutil.ReadFile(tokenPath)
+	data, err := os.ReadFile(tokenPath)
 	if err != nil {
 		panic(err)
 	}
@@ -1034,4 +1175,16 @@ func redactFields(responseBody []byte) string {
 	}
 
 	return string(redactedResponse)
+}
+
+func debugDir(exeName string) string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join("C:\\ProgramData\\KeyAuth\\Debug", exeName)
+	default:
+		if dir, err := os.UserCacheDir(); err == nil && dir != "" {
+			return filepath.Join(dir, "keyauth", "debug", exeName)
+		}
+		return filepath.Join(os.TempDir(), "keyauth", "debug", exeName)
+	}
 }
