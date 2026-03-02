@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto/md5"
@@ -50,6 +51,34 @@ var (
 	PublicKey     string = "5586b4bc69c7a4b487e4563a4cd96afd39140f919bd31cea7d1c6a1e8439422b"
 	serverTime    int64
 	serverTimeAt  time.Time
+)
+
+type LockoutState struct {
+	FailCount    int
+	FirstFailAt  time.Time
+	LockedUntil  time.Time
+	LastFailAt   time.Time
+}
+
+type LockoutConfig struct {
+	MaxAttempts int
+	Window      time.Duration
+	Lockout     time.Duration
+}
+
+var lockoutMu sync.Mutex
+var lockoutState LockoutState
+
+var LockoutSettings = LockoutConfig{
+	MaxAttempts: 5,
+	Window:      2 * time.Minute,
+	Lockout:     5 * time.Minute,
+}
+
+const (
+	initFailDelayMs  = 1500
+	badInputDelayMs  = 3000
+	closeDelayMs     = 5000
 )
 
 func Api(name, ownerid, version, path string) {
@@ -875,6 +904,71 @@ func EnforceNotExpired() {
 		time.Sleep(3 * time.Second)
 		os.Exit(1)
 	}
+}
+
+func InitFailDelay() {
+	time.Sleep(initFailDelayMs * time.Millisecond)
+}
+
+func BadInputDelay() {
+	time.Sleep(badInputDelayMs * time.Millisecond)
+}
+
+func CloseDelay() {
+	time.Sleep(closeDelayMs * time.Millisecond)
+}
+
+func LockoutStateSnapshot() LockoutState {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	return lockoutState
+}
+
+func LockoutActive() bool {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	if lockoutState.LockedUntil.IsZero() {
+		return false
+	}
+	return time.Now().Before(lockoutState.LockedUntil)
+}
+
+func LockoutRemainingMs() int64 {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	if lockoutState.LockedUntil.IsZero() {
+		return 0
+	}
+	remaining := time.Until(lockoutState.LockedUntil)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining.Milliseconds()
+}
+
+func RecordLoginFail() {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+
+	now := time.Now()
+	lockoutState.LastFailAt = now
+
+	if lockoutState.FirstFailAt.IsZero() || now.Sub(lockoutState.FirstFailAt) > LockoutSettings.Window {
+		lockoutState.FirstFailAt = now
+		lockoutState.FailCount = 1
+		return
+	}
+
+	lockoutState.FailCount++
+	if lockoutState.FailCount >= LockoutSettings.MaxAttempts {
+		lockoutState.LockedUntil = now.Add(LockoutSettings.Lockout)
+	}
+}
+
+func ResetLockout() {
+	lockoutMu.Lock()
+	defer lockoutMu.Unlock()
+	lockoutState = LockoutState{}
 }
 
 func GetHWID() string {

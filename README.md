@@ -66,6 +66,29 @@ You don't need to add any code to initalize. KeyAuth will initalize when the ins
 
 If you edit the example, you can init it by running `KeyAuthApp.Init()`
 
+## **Client-side delays & lockout helpers (optional)**
+
+These helpers are client-side only and meant to slow down abuse. They do not replace server-side enforcement.
+
+```go
+// Delay helpers
+KeyAuthApp.InitFailDelay()
+KeyAuthApp.BadInputDelay()
+KeyAuthApp.CloseDelay()
+
+// Lockout helpers
+if KeyAuthApp.LockoutActive() {
+    fmt.Printf("Locked out, try again in %d ms\n", KeyAuthApp.LockoutRemainingMs())
+    return
+}
+
+// On failed login attempt:
+KeyAuthApp.RecordLoginFail()
+
+// On successful login:
+KeyAuthApp.ResetLockout()
+```
+
 ## **Display application information**
 
 ```go
